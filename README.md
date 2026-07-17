@@ -6,13 +6,18 @@
 
 ## 快速开始
 
-以 **root** 执行：
+> ⚠️ 仓库为私有，`wget` 直连 raw.githubusercontent.com 不适用，请使用下方 `gh` 方式。
+
+### 方式一：gh CLI（推荐）
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/guochan2019/onekey-frpc/main/onekey-frpc.sh | bash
+gh repo clone guochan2019/onekey-frpc
+cd onekey-frpc
+chmod +x onekey-frpc.sh
+./onekey-frpc.sh
 ```
 
-或克隆后执行：
+### 方式二：git clone（需配置 SSH 密钥）
 
 ```bash
 git clone git@github.com:guochan2019/onekey-frpc.git
