@@ -9,17 +9,13 @@
 以 **root** 执行：
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/guochan2019/onekey-frpc/main/onekey-frpc.sh | bash
-```
-
-或克隆后执行：
-
-```bash
 git clone git@github.com:guochan2019/onekey-frpc.git
 cd onekey-frpc
 chmod +x onekey-frpc.sh
 ./onekey-frpc.sh
 ```
+
+> ⚠️ 仓库为私有，需先配置 SSH 密钥访问 GitHub。`wget` 直连 raw 不适用于私有仓库。
 
 > ⚠️ 需要 root 权限。
 
