@@ -1,17 +1,14 @@
 #!/bin/bash
 # ============================================================
-# onekey-frpc — frp 客户端 (frpc) 一键安装/升级脚本
+# onekey-frpc — frp 客户端 (frpc) 一键安装/升级/卸载脚本
 # 适用环境: Linux (amd64 / arm64 / arm)
-# 首次运行 = 安装，再次运行 = 自动升级
 # ============================================================
 set -e
 
-# ---------- 错误捕获（防止静默失败） ----------
 trap 'echo -e "\033[0;31m[ERROR] 脚本执行失败，请检查:\033[0m
   - 网络连接（能否访问 github.com）
   - 是否以 root 运行
-  - 系统架构是否支持
-  - 尝试直接下载脚本后执行: bash -x onekey-frpc.sh" >&2' ERR
+  - 系统架构是否支持" >&2' ERR
 
 # ---------- 配置 ----------
 INSTALL_DIR="/opt/frp"
@@ -19,10 +16,7 @@ BIN="/usr/local/bin/frpc"
 FALLBACK_VER="v0.70.0"
 
 # ---------- 彩色输出 ----------
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 err()   { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
@@ -33,84 +27,56 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # ---------- 检测架构 ----------
-info "检测系统架构..."
-ARCH=$(uname -m)
-case "$ARCH" in
-  x86_64)  FRP_ARCH="amd64" ;;
-  aarch64) FRP_ARCH="arm64" ;;
-  armv7l)  FRP_ARCH="arm"   ;;
-  *)       err "不支持的架构: ${ARCH} (仅支持 amd64 / arm64 / arm)" ;;
-esac
-info "  架构: ${ARCH} → frp_linux_${FRP_ARCH}"
+detect_arch() {
+  case "$(uname -m)" in
+    x86_64)  echo "amd64" ;;
+    aarch64) echo "arm64" ;;
+    armv7l)  echo "arm"   ;;
+    i386|i686) echo "386" ;;
+    *)       echo ""       ;;
+  esac
+}
 
 # ---------- 获取最新版本 ----------
-info "获取最新版本..."
-LATEST_VER=$(curl -s --connect-timeout 5 \
-  https://api.github.com/repos/fatedier/frp/releases/latest \
-  | grep -o '"tag_name": *"[^"]*"' | grep -o 'v[^"]*' 2>/dev/null || echo "$FALLBACK_VER")
-LATEST_NUM="${LATEST_VER#v}"  # v0.70.0 → 0.70.0
-info "  最新版本: ${LATEST_VER}"
+fetch_latest_ver() {
+  curl -s --connect-timeout 5 \
+    https://api.github.com/repos/fatedier/frp/releases/latest \
+    | grep -o '"tag_name": *"[^"]*"' | grep -o 'v[^\"]*' 2>/dev/null || echo ""
+}
 
-DOWNLOAD_URL="https://github.com/fatedier/frp/releases/download/${LATEST_VER}/frp_${LATEST_NUM}_linux_${FRP_ARCH}.tar.gz"
-
-# =================== 判断模式：安装 vs 升级 ===================
-if command -v frpc &>/dev/null; then
-  # ---------- 升级模式 ----------
-  CURRENT_VER=$(frpc --version 2>/dev/null | head -1 || echo "unknown")
-  info "当前版本: ${CURRENT_VER}"
-
-  if [ "${CURRENT_VER}" = "${LATEST_NUM}" ]; then
-    info ""
-    info "========== 已是最新版本 =========="
-    info " frpc ${CURRENT_VER} 无需升级"
-    info " 如需强制重装，请先卸载:"
-    info "   systemctl stop frpc && rm -f ${BIN}"
-    info "   然后重新运行此脚本"
-    info "=================================="
-    exit 0
+# ---------- 获取当前版本 ----------
+get_current_ver() {
+  if ! command -v frpc &>/dev/null; then
+    echo ""; return
   fi
+  frpc --version 2>/dev/null | head -1 || echo ""
+}
 
-  warn "发现新版本 ${CURRENT_VER} → ${LATEST_VER}"
-  info "=== 开始升级 frpc ==="
-
-  # 备份旧二进制（可选）
-  cp "$BIN" "${BIN}.bak.$(date +%Y%m%d_%H%M%S)" 2>/dev/null || true
-
-  # 下载
-  TMPDIR=$(mktemp -d)
-  cd "$TMPDIR"
-  wget -q "$DOWNLOAD_URL" -O frp.tar.gz
-  tar xzf frp.tar.gz
-  EXTRACT_DIR=$(find . -maxdepth 1 -type d -name "frp_*" | head -1)
-  [ -z "$EXTRACT_DIR" ] && err "解压后找不到 frp 目录"
-
-  # 替换二进制
-  cp "${EXTRACT_DIR}/frpc" "$BIN"
-  chmod +x "$BIN"
-
-  # 更新示例配置
-  mkdir -p "$INSTALL_DIR"
-  cp "${EXTRACT_DIR}/conf/frpc.toml" "${INSTALL_DIR}/frpc.example.toml" 2>/dev/null || true
-  rm -rf "$TMPDIR"
-
-  # 重启服务
-  if systemctl is-active frpc &>/dev/null; then
-    systemctl restart frpc
-    info "  ✓ frpc 服务已重启"
-  fi
-
+# ---------- 卸载 ----------
+uninstall_frpc() {
   echo ""
-  info "========== 升级完成 =========="
-  info " frpc ${CURRENT_VER} → ${LATEST_VER}"
-  info " 备份: ${BIN}.bak.$(date +%Y%m%d_%H%M%S)"
-  info "================================"
+  warn "========== 卸载 frpc =========="
+  echo ""
+  systemctl stop frpc 2>/dev/null || true
+  systemctl disable frpc 2>/dev/null || true
+  rm -f /etc/systemd/system/frpc.service
+  systemctl daemon-reload
+  rm -f "$BIN"
+  rm -rf "$INSTALL_DIR"
+  info "✓ frpc 已卸载"
+  info "  配置目录 ${INSTALL_DIR} 已删除"
+  echo ""
+  exit 0
+}
 
-else
-  # ---------- 全新安装模式 ----------
-  info "=== 开始安装 frpc ==="
+# ---------- 安装 ----------
+do_install() {
+  LUCKY_VER="$1"
+  FRP_ARCH="$2"
+  LATEST_NUM="${LUCKY_VER#v}"
 
-  # 1) 下载
-  info "下载 frp ${LATEST_VER}..."
+  info "=== 1/4 下载 frp ${LUCKY_VER} ==="
+  DOWNLOAD_URL="https://github.com/fatedier/frp/releases/download/${LUCKY_VER}/frp_${LATEST_NUM}_linux_${FRP_ARCH}.tar.gz"
   TMPDIR=$(mktemp -d)
   cd "$TMPDIR"
   wget -q "$DOWNLOAD_URL" -O frp.tar.gz
@@ -124,11 +90,10 @@ else
   cp "${EXTRACT_DIR}/conf/frpc.toml" "${INSTALL_DIR}/frpc.example.toml" 2>/dev/null || true
   cp -r "${EXTRACT_DIR}/conf" "${INSTALL_DIR}/conf.example" 2>/dev/null || true
   rm -rf "$TMPDIR"
-  info "  ✓ frpc 已安装到 ${BIN}"
+  info "  ✓ frpc 已安装"
 
-  # 2) 创建配置模板（仅首次）
+  info "=== 2/4 创建配置模板 ==="
   if [ ! -f "${INSTALL_DIR}/frpc.toml" ]; then
-    info "创建配置模板..."
     cat > "${INSTALL_DIR}/frpc.toml" << 'CONFIGEOF'
 # ============================================================
 # frpc 配置文件
@@ -199,8 +164,7 @@ CONFIGEOF
     info "  - 配置已存在，保留不变"
   fi
 
-  # 3) 创建 systemd 服务
-  info "创建 systemd 服务..."
+  info "=== 3/4 创建 systemd 服务 ==="
   cat > /etc/systemd/system/frpc.service << 'SERVICEEOF'
 [Unit]
 Description=frp client (frpc) - reverse proxy agent
@@ -221,31 +185,122 @@ SERVICEEOF
   systemctl daemon-reload
   info "  ✓ systemd 服务已创建"
 
-  # 4) 验证
-  FRPC_VER=$(frpc --version 2>/dev/null || echo "${LATEST_NUM}")
-  info "  ✓ frpc 版本: ${FRPC_VER}"
-
-  # 完成
-  echo ""
+  info "=== 4/4 完成 ==="
+  info ""
   info "========== 安装完成 =========="
-  info " frpc 版本:    ${LATEST_VER}"
+  info " frpc 版本:    ${LUCKY_VER}"
   info " 安装目录:     ${INSTALL_DIR}/"
   info " 配置文件:     ${INSTALL_DIR}/frpc.toml    ← 请先编辑此文件"
   info " 管理地址:     http://127.0.0.1:7400"
-  echo ""
-  info "=== 下一步：配置并启动 ==="
-  info "  1) 编辑配置文件:"
-  info "     nano ${INSTALL_DIR}/frpc.toml"
-  info "     至少修改: serverAddr、auth.token"
-  info "     按需启用 [[proxies]] 段落"
   info ""
-  info "  2) 启动 frpc:"
-  info "     systemctl enable --now frpc"
-  echo ""
-  info "=== 常用命令 ==="
-  info "  systemctl restart frpc   # 重启"
-  info "  systemctl stop frpc      # 停止"
-  info "  frpc reload              # 热加载配置"
-  info "  frpc verify -c /opt/frp/frpc.toml  # 验证语法"
-  info "  再次运行此脚本即可升级  # 一键升级"
+  info "=== 启动命令 ==="
+  info "  systemctl enable --now frpc"
+  info ""
+  info "再次运行脚本可升级或卸载 frpc"
+  info ""
+}
+
+# ---------- 升级 ----------
+do_upgrade() {
+  LUCKY_VER="$1"
+  FRP_ARCH="$2"
+  LATEST_NUM="${LUCKY_VER#v}"
+  CURRENT_VER="$3"
+
+  info "=== 升级 frpc: ${CURRENT_VER} → ${LUCKY_VER} ==="
+
+  DOWNLOAD_URL="https://github.com/fatedier/frp/releases/download/${LUCKY_VER}/frp_${LATEST_NUM}_linux_${FRP_ARCH}.tar.gz"
+
+  # 备份旧二进制
+  cp "$BIN" "${BIN}.bak.$(date +%Y%m%d_%H%M%S)" 2>/dev/null || true
+
+  TMPDIR=$(mktemp -d)
+  cd "$TMPDIR"
+  wget -q "$DOWNLOAD_URL" -O frp.tar.gz
+  tar xzf frp.tar.gz
+  EXTRACT_DIR=$(find . -maxdepth 1 -type d -name "frp_*" | head -1)
+  [ -z "$EXTRACT_DIR" ] && err "解压后找不到 frp 目录"
+
+  cp "${EXTRACT_DIR}/frpc" "$BIN"
+  chmod +x "$BIN"
+
+  mkdir -p "$INSTALL_DIR"
+  cp "${EXTRACT_DIR}/conf/frpc.toml" "${INSTALL_DIR}/frpc.example.toml" 2>/dev/null || true
+  rm -rf "$TMPDIR"
+
+  if systemctl is-active frpc &>/dev/null; then
+    systemctl restart frpc
+    info "  ✓ frpc 服务已重启"
+  fi
+
+  info ""
+  info "========== 升级完成 =========="
+  info " ${CURRENT_VER} → ${LUCKY_VER}"
+  info " 备份: ${BIN}.bak.*"
+  info "================================"
+}
+
+# =================== 主菜单 ===================
+echo ""
+echo "========================================"
+echo "  frpc 一键安装/升级/卸载脚本"
+echo "  https://github.com/fatedier/frp"
+echo "========================================"
+echo ""
+
+FRP_ARCH=$(detect_arch)
+[ -z "$FRP_ARCH" ] && err "不支持的架构: $(uname -m) (仅支持 amd64 / arm64 / arm / 386)"
+
+INSTALLED=false
+CURRENT_VER=$(get_current_ver)
+if [ -f "$BIN" ]; then
+  INSTALLED=true
+  if [ -n "$CURRENT_VER" ]; then
+    info "检测到 frpc ${CURRENT_VER} 已安装"
+  else
+    info "检测到 frpc 已安装（版本未知）"
+  fi
+else
+  info "frpc 未安装"
 fi
+
+echo ""
+echo "请选择操作："
+echo "  1. 安装 / 升级 frpc"
+echo "  2. 卸载 frpc"
+echo "  0. 退出"
+echo ""
+read -p "请输入选项 (0-2): " ACTION
+echo ""
+
+case "$ACTION" in
+  2)
+    uninstall_frpc
+    ;;
+  0)
+    info "已退出"
+    exit 0
+    ;;
+  1|"")
+    LATEST_VER=$(fetch_latest_ver)
+    if [ -z "$LATEST_VER" ]; then
+      LATEST_VER="$FALLBACK_VER"
+      warn "GitHub API 不可用，使用后备版本 ${FALLBACK_VER}"
+    fi
+
+    if [ "$INSTALLED" = true ]; then
+      LATEST_NUM="${LATEST_VER#v}"
+      if [ -n "$CURRENT_VER" ] && [ "$CURRENT_VER" = "$LATEST_NUM" ]; then
+        info "当前版本: ${CURRENT_VER}"
+        info "✓ 已是最新版本，无需更新"
+        exit 0
+      fi
+      do_upgrade "$LATEST_VER" "$FRP_ARCH" "$CURRENT_VER"
+    else
+      do_install "$LATEST_VER" "$FRP_ARCH"
+    fi
+    ;;
+  *)
+    err "无效选项: ${ACTION}"
+    ;;
+esac
