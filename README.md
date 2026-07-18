@@ -8,19 +8,12 @@
 
 > ⚠️ 需要 root 权限。
 
-### 方式一：gh CLI（推荐）
-
 ```bash
-gh repo clone guochan2019/onekey-frpc
-cd onekey-frpc
-chmod +x onekey-frpc.sh
-./onekey-frpc.sh
-```
+# 方式一：一键直达（推荐）
+bash <(wget -qO- https://raw.githubusercontent.com/guochan2019/onekey-frpc/main/onekey-frpc.sh)
 
-### 方式二：git clone（需配置 SSH 密钥）
-
-```bash
-git clone git@github.com:guochan2019/onekey-frpc.git
+# 方式二：git clone
+git clone https://github.com/guochan2019/onekey-frpc.git
 cd onekey-frpc
 chmod +x onekey-frpc.sh
 ./onekey-frpc.sh
