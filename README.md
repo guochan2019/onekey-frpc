@@ -1,6 +1,6 @@
 # onekey-frpc
 
-一键在 Linux 上安装 [frp](https://github.com/fatedier/frp) 客户端 (frpc)，自动获取最新版本 + 生成配置模板 + 创建 systemd 服务。
+一键在 Debian 13 上安装 [frp](https://github.com/fatedier/frp) 客户端 (frpc)，自动获取最新版本 + 生成配置模板 + 创建 systemd 服务。
 
 ---
 
