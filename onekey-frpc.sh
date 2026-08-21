@@ -71,12 +71,12 @@ uninstall_frpc() {
 
 # ---------- 安装 ----------
 do_install() {
-  LUCKY_VER="$1"
+  FRP_VER="$1"
   FRP_ARCH="$2"
-  LATEST_NUM="${LUCKY_VER#v}"
+  LATEST_NUM="${FRP_VER#v}"
 
-  info "=== 1/4 下载 frp ${LUCKY_VER} ==="
-  DOWNLOAD_URL="https://github.com/fatedier/frp/releases/download/${LUCKY_VER}/frp_${LATEST_NUM}_linux_${FRP_ARCH}.tar.gz"
+  info "=== 1/4 下载 frp ${FRP_VER} ==="
+  DOWNLOAD_URL="https://github.com/fatedier/frp/releases/download/${FRP_VER}/frp_${LATEST_NUM}_linux_${FRP_ARCH}.tar.gz"
   TMPDIR=$(mktemp -d)
   cd "$TMPDIR"
   wget -q "$DOWNLOAD_URL" -O frp.tar.gz
@@ -85,8 +85,10 @@ do_install() {
   [ -z "$EXTRACT_DIR" ] && err "解压后找不到 frp 目录"
 
   mkdir -p "$INSTALL_DIR"
-  cp "${EXTRACT_DIR}/frpc" "$BIN"
-  chmod +x "$BIN"
+  TMP_FILE=$(mktemp)
+  cp "${EXTRACT_DIR}/frpc" "$TMP_FILE"
+  chmod +x "$TMP_FILE"
+  mv "$TMP_FILE" "$BIN"
   cp "${EXTRACT_DIR}/conf/frpc.toml" "${INSTALL_DIR}/frpc.example.toml" 2>/dev/null || true
   cp -r "${EXTRACT_DIR}/conf" "${INSTALL_DIR}/conf.example" 2>/dev/null || true
   rm -rf "$TMPDIR"
@@ -188,7 +190,7 @@ SERVICEEOF
   info "=== 4/4 完成 ==="
   info ""
   info "========== 安装完成 =========="
-  info " frpc 版本:    ${LUCKY_VER}"
+  info " frpc 版本:    ${FRP_VER}"
   info " 安装目录:     ${INSTALL_DIR}/"
   info " 配置文件:     ${INSTALL_DIR}/frpc.toml    ← 请先编辑此文件"
   info " 管理地址:     http://127.0.0.1:7400"
@@ -202,17 +204,14 @@ SERVICEEOF
 
 # ---------- 升级 ----------
 do_upgrade() {
-  LUCKY_VER="$1"
+  FRP_VER="$1"
   FRP_ARCH="$2"
-  LATEST_NUM="${LUCKY_VER#v}"
+  LATEST_NUM="${FRP_VER#v}"
   CURRENT_VER="$3"
 
-  info "=== 升级 frpc: ${CURRENT_VER} → ${LUCKY_VER} ==="
+  info "=== 升级 frpc: ${CURRENT_VER} → ${FRP_VER} ==="
 
-  DOWNLOAD_URL="https://github.com/fatedier/frp/releases/download/${LUCKY_VER}/frp_${LATEST_NUM}_linux_${FRP_ARCH}.tar.gz"
-
-  # 备份旧二进制
-  cp "$BIN" "${BIN}.bak.$(date +%Y%m%d_%H%M%S)" 2>/dev/null || true
+  DOWNLOAD_URL="https://github.com/fatedier/frp/releases/download/${FRP_VER}/frp_${LATEST_NUM}_linux_${FRP_ARCH}.tar.gz"
 
   TMPDIR=$(mktemp -d)
   cd "$TMPDIR"
@@ -221,8 +220,14 @@ do_upgrade() {
   EXTRACT_DIR=$(find . -maxdepth 1 -type d -name "frp_*" | head -1)
   [ -z "$EXTRACT_DIR" ] && err "解压后找不到 frp 目录"
 
-  cp "${EXTRACT_DIR}/frpc" "$BIN"
-  chmod +x "$BIN"
+  # 备份旧二进制（从运行中的文件稳妥读取）
+  cat "$BIN" > "${BIN}.bak.$(date +%Y%m%d_%H%M%S)" 2>/dev/null || true
+
+  # 通过 tmp + mv 安全替换
+  TMP_FILE=$(mktemp)
+  cp "${EXTRACT_DIR}/frpc" "$TMP_FILE"
+  chmod +x "$TMP_FILE"
+  mv "$TMP_FILE" "$BIN"
 
   mkdir -p "$INSTALL_DIR"
   cp "${EXTRACT_DIR}/conf/frpc.toml" "${INSTALL_DIR}/frpc.example.toml" 2>/dev/null || true
@@ -235,7 +240,7 @@ do_upgrade() {
 
   info ""
   info "========== 升级完成 =========="
-  info " ${CURRENT_VER} → ${LUCKY_VER}"
+  info " ${CURRENT_VER} → ${FRP_VER}"
   info " 备份: ${BIN}.bak.*"
   info "================================"
 }
