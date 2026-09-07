@@ -106,6 +106,9 @@ do_install() {
 serverAddr = "your-server-ip"
 serverPort = 7000
 
+# 保活：frps 不可达时重试而非退出（配合 systemd Restart 双保险）
+loginFailExit = false
+
 # 认证令牌（需与 frps 的 auth.token 一致）
 auth.method = "token"
 auth.token = "your-token"
