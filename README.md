@@ -81,7 +81,7 @@ wget -qO- https://raw.githubusercontent.com/guochan2019/onekey-frpc/main/onekey-
 
 | 参数 | 说明 | 示例 |
 |------|------|------|
-| `serverAddr` | frps 服务器 IP 或域名 | `"1.2.3.4"` |
+| `serverAddr` | frps 服务器 IP 或域名 | `"192.0.2.1"` |
 | `serverPort` | frps 绑定的端口 | `7000` |
 | `auth.token` | 认证令牌（与 frps 一致） | `"your-token"` |
 
